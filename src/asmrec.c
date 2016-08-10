@@ -4,9 +4,10 @@
 #include "asm.h"
 #include "directive.h"
 
-static char *cfg_file_formats[3] =
+static char *cfg_file_formats[4] =
   { "%s.cfg",
     "cfg/%s.cfg",
+    "/home/tim/dev/caspr/cfg/%s.cfg",
     NULL };
 
 /* allocate one empty asm record */

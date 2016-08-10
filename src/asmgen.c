@@ -4,6 +4,104 @@
 #include "asm.h"
 #include "directive.h"
 
+int asmgen_parse_value(struct ScanData *scanner,
+		       struct SymTab **curSyms,
+		       unsigned int *pResult) {
+  struct Token curToken;
+  unsigned int lval, rval;
+  
+  /* scan next token or expression */
+  switch (get_token(&curToken, scanner)) {
+    
+  case TOK_INT:
+    /* integer value, just pass it back */
+    DEBUG(1) printf("Got an integer - %d\n", curToken.value);
+    lval = curToken.value;
+    if (curToken.limHigh - curToken.limLow < 8*sizeof(lval) - 1) {
+      /* if token is specified with a bitslice, use only those bits */
+      lval = GETBITS(curToken.limLow, curToken.limHigh, lval);
+    }
+    *pResult = lval;
+    return 0;
+    break;
+    
+  case TOK_IDENT:
+    /* identifier, locate it in the symbol table */
+    DEBUG(1) printf("Got a symbol lookup - '%s'\n", curToken.token);
+    if (symtab_lookup(curSyms, curToken.token, NULL, (int*)&lval) == 0) {
+      /* symbol table lookup success */
+      if (curToken.limHigh - curToken.limLow < 8*sizeof(lval) - 1) {
+	/* if token is specified with a bitslice, use only those bits */
+	lval = GETBITS(curToken.limLow, curToken.limHigh, lval);
+      }
+      *pResult = lval;
+      return 0;
+    }
+    printf("ERROR - Symbol '%s' Not Found\n", curToken.token);
+    break;
+    
+  case TOK_LPAREN:
+    /* left parentheses, beginning of an arithmetic expression */
+    
+    /* start by evaluating first term (may be another expression */
+    if (asmgen_parse_value(scanner, curSyms, &lval) != 0) {
+      /* error parsing sub-expression */
+      printf("ERROR - Cannot Parse Arithmetic Expression\n");
+      return -1;
+    }
+    
+    /* inner loop to evalate left-to-right arithmetic expressions */
+    while (1) {
+      /* get next token */
+      switch (get_token(&curToken, scanner)) {
+	
+      case TOK_RPAREN:
+	/* close parentheses, end of sub-expression */
+	*pResult = lval;
+	return 0;
+	break;
+	
+      case TOK_ARITHOP:
+	/* arithmetic operation (+/-), get right hand value */
+	if (asmgen_parse_value(scanner, curSyms, &rval) != 0) {
+	  /* error parsing sub-expression */
+	  printf("ERROR - Cannot Parse Arithmetic Expression\n");
+	  return -1;
+	}
+	
+	/* handle arithmetic operation */
+	switch (curToken.token[0]) {
+	case '+':
+	  lval += rval;
+	  break;
+	case '-':
+	  lval -= rval;
+	  break;
+	default:
+	  /* unhandled */
+	  printf("ERROR - Unknown Arithmetic operation '%s'\n", curToken.token);
+	  return -1;
+	  break;
+	}
+	break;
+	
+      default:
+	printf("ERROR - Unexpected token '%s' while parsing subexpression\n",
+	       curToken.token);
+	return -1;
+	break;
+      }
+    }
+    break;
+    
+  default:
+    /* unknown token */
+    printf("Unhandled token \'%s\'\n", curToken.token);
+    break;
+  }
+  return -1;
+}
+
 int asmgen_parse_syms(struct SymTab **curSyms,
 		      FILE *handle) {
   struct ScanData asmScan;
@@ -78,7 +176,7 @@ int asmgen_parse_syms(struct SymTab **curSyms,
 
 int asmgen_assemble(struct SymTab **curSyms,
 		    FILE *input,
-		    unsigned char *data) {
+		    char *data) {
   struct ScanData cfgScan;
   struct Token curToken;
   struct ASMRecord *instr;
@@ -106,7 +204,7 @@ int asmgen_assemble(struct SymTab **curSyms,
       
     case TOK_DIRECTIVE:
       /* directive, pass current data to directive handler */
-      directive_parse(&cfgScan, &curToken, curSyms, &asmcfg, &offset);
+      directive_parse(&cfgScan, &curToken, NULL, &asmcfg, &offset);
       break;
       
     case TOK_IDENT:
@@ -130,43 +228,15 @@ int asmgen_assemble(struct SymTab **curSyms,
 
       outBits = instr->asm_mask;
       for (argCount=0; argCount<instr->num_args; argCount++) {
-	/* verify type of next token */
-	switch (get_token(&curToken, &cfgScan)) {
-	case TOK_INT:
-	  /* integer value, try to plug it in */
-	  DEBUG(1) printf("Argument %d - integer, value %02x\n", argCount, curToken.value);
-	  value = (unsigned int)curToken.value;
-	  if (curToken.limHigh - curToken.limLow < 8*sizeof(value) - 1) {
-	    value = GETBITS(curToken.limLow, curToken.limHigh, value);
-	  }
-	  if (CHECK_FIELD_TOO_SMALL(instr->arg_widths[argCount], value)) {
-	    printf("WARNING - Value 0x%x not representable with %d bits, line %d\n",
-		   value, instr->arg_widths[argCount], curToken.linenum);
-	  }
-	  break;
-	  
-	case TOK_IDENT:
-	  /* identifier, locate it in the symbol table first */
-	  DEBUG(1) printf("Argument %d - identifier\n", argCount);
-	  if (symtab_lookup(curSyms, curToken.token, NULL, &value) != 0) {
-	    fprintf(stderr, "ERROR - Unknown symbol %s, line %d\n",
-		    curToken.token, curToken.linenum);
-	    return -1;
-	  }
-	  if (curToken.limHigh - curToken.limLow < 8*sizeof(value) - 1) {
-	    value = GETBITS(curToken.limLow, curToken.limHigh, value);
-	  }
-	  if (CHECK_FIELD_TOO_SMALL(instr->arg_widths[argCount], value)) {
-	    printf("WARNING - Token \'%s\'(0x%x) not representable with %d bits, line %d\n",
-		   curToken.token, value, instr->arg_widths[argCount], curToken.linenum);
-	  }
-	  break;
-	  
-	default:
+	/* parse next token or parenthesized expression */
+	if (asmgen_parse_value(&cfgScan, curSyms, &value) != 0) {
 	  fprintf(stderr, "ERROR - Argument %d bad, line %d\n",
 		  argCount, curToken.linenum);
 	  return -1;
-	  break;
+	  }
+	if (CHECK_FIELD_TOO_SMALL(instr->arg_widths[argCount], value)) {
+	  printf("WARNING - Value 0x%x not representable with %d bits, line %d\n",
+		 value, instr->arg_widths[argCount], curToken.linenum);
 	}
 	
 	/* token OK, fill in all fields using this */

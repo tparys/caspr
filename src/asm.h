@@ -48,11 +48,14 @@ struct ASMRecord* asmrec_load(struct SymTab **curSyms, char *infile);
 int asmrec_free(struct ASMRecord *ptr);
 
 /* generation of machine code */
+int asmgen_parse_value(struct ScanData *scanner,
+		       struct SymTab **curSyms,
+		       unsigned int *pResult);
 int asmgen_parse_syms(struct SymTab **curSyms,
 		      FILE *handle);
 int asmgen_assemble(struct SymTab **curSyms,
 		    FILE *input,
-		    unsigned char *data);
+		    char *data);
 
 /* file output */
 int asmout_make_rom(struct SymTab **curSyms, char *out, char *data);

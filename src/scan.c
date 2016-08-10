@@ -131,6 +131,22 @@ TokenType scan_token(struct Token *inToken, struct ScanData *data) {
 	ungetc('x',data->input);	/* tricky tricky */
 	ungetc('0',data->input);
 	break;
+      case '(':
+	/* left parentheses */
+	inToken->type = TOK_LPAREN;
+	curState = DONE;
+	break;
+      case ')':
+	/* right parentheses */
+	inToken->type = TOK_RPAREN;
+	curState = DONE;
+	break;
+      case '+':
+      case '-':
+	/* arithmetic operator */
+	inToken->type = TOK_ARITHOP;
+	curState = DONE;
+	break;
 	
       default:
 	/* unhandled character */

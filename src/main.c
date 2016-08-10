@@ -31,8 +31,8 @@ int main(int argc, char **argv) {
   /* local vars */
   struct SymTab *prgSyms = NULL;
   FILE *inFile;
-  unsigned char *data, outfmt[64];
-  unsigned char *outName, guessed[1024];
+  char *data, outfmt[64];
+  char *outName, guessed[1024];
   int prgSize, ret;
   
   symtab_clear(&prgSyms);
@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "ERROR - Unknown file size\n");
     return -1;
   }
-  if ((data = CALLOC(unsigned char, prgSize)) == NULL) {
+  if ((data = CALLOC(char, prgSize)) == NULL) {
     fprintf(stderr, "ERROR - Memory allocation failed\n");
     return -1;
   }

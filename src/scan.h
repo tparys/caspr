@@ -6,7 +6,8 @@
 /* this is the enumerated type of what tokens are recognized */
 typedef enum {
   TOK_EOF, TOK_ERROR, TOK_IDENT, TOK_IDENT_LIMIT, TOK_LABEL,
-  TOK_DIRECTIVE, TOK_INT, TOK_ENDL, TOK_FORMAT } TokenType;
+  TOK_DIRECTIVE, TOK_INT, TOK_ENDL, TOK_FORMAT, TOK_LPAREN,
+  TOK_RPAREN, TOK_ARITHOP } TokenType;
 
 /* here is the generalized Token structure */
 struct Token {

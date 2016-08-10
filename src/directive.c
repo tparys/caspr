@@ -11,6 +11,7 @@ int directive_parse(struct ScanData *scanInfo,
 		    unsigned int *offset) {
   char tokName[MAX_TOKLEN];
   struct Token newToken;
+  unsigned int value;
   
   /* architecture selection directive */
   if ((strcmp(dirToken->token, ".arch") == 0)) {
@@ -46,13 +47,23 @@ int directive_parse(struct ScanData *scanInfo,
     
     /* check that we have a valid pointer to write to */
     if (curSyms != NULL) {
-      /* next token should be a numeric value to set */
-      if (get_token(&newToken, scanInfo) != TOK_INT) {
-	fprintf(stderr, "ERROR - Unexpected Token %s, line %d\n",
-		newToken.token, newToken.linenum);
-	return -1;
+      /* next token(s) should be a numeric value/expression to set */
+      if (1) {
+	if (asmgen_parse_value(scanInfo, curSyms, &value) != 0) {
+	  fprintf(stderr, "ERROR - Invalid Define, line %d\n",
+		  newToken.linenum);
+	  return -1;
+	}
+	symtab_record(curSyms, tokName, NULL, value);
       }
-      symtab_record(curSyms, tokName, NULL, newToken.value);
+      else {
+	if (get_token(&newToken, scanInfo) != TOK_INT) {
+	  fprintf(stderr, "ERROR - Unexpected Token %s, line %d\n",
+		  newToken.token, newToken.linenum);
+	  return -1;
+	}
+	symtab_record(curSyms, tokName, NULL, newToken.value);
+      }
     }
   }
   
